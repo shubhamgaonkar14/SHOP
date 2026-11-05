@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mangokatta · My Salary Slips</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .slip-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 18px;
+      margin: 20px 0;
+    }
+    .slip-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .slip-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+      border-color: #2c5282;
+    }
+    .slip-card .month {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1e3a5f;
+      margin-bottom: 10px;
+    }
+    .slip-card .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      font-size: 13px;
+      color: #4a5568;
+    }
+    .slip-card .row strong {
+      color: #2d3748;
+    }
+    .slip-card .net {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 2px solid #e2e8f0;
+      font-size: 20px;
+      font-weight: 700;
+      color: #d97706;
+      text-align: center;
+    }
+    .slip-card .meta {
+      font-size: 11px;
+      color: #a0aec0;
+      text-align: center;
+      margin-top: 8px;
+    }
+    .empty-state {
+      text-align: center;
+      color: #718096;
+      padding: 40px;
+      width: 100%;
+    }
+    .empty-state .icon {
+      font-size: 28px;
+      display: block;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">🏢 MANGOKATTA</div>
+    <div class="nav-links">
+      <a href="index.html">📝 Generate Slip</a>
+      <a href="my-slips.html" class="active">💼 My Slips</a>
+      <a href="history.html">📊 History</a>
+      <a href="versions.html">🔄 Attendance Versions</a>
+      <a href="employees.html">👥 Employees</a>
+      <a href="business.html">💼 Business</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h2>💼 My Salary Slips</h2>
+    <p style="color:#718096;margin-bottom:15px;" id="subtitle">All your saved salary slips</p>
+
+    <div class="slip-grid" id="slipGrid">
+      <p style="text-align:center;color:#718096;padding:40px;width:100%;">
+        <span style="font-size:28px;display:block;margin-bottom:10px;">⏳</span>
+        Loading your slips...
+      </p>
+    </div>
+  </div>
+
+  <script src="auth-guard.js"></script>
+  <script>
+    const API = window.location.hostname === 'localhost'
+      ? 'http://localhost:3000/api'
+      : '/api';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Wait for auth-guard to populate window.__currentUser.
+      // Prefer the authReady promise if it exists; fall back to polling.
+      try {
+        if (window.__authReady && typeof window.__authReady.then === 'function') {
+          await window.__authReady;
+        } else {
+          // Polling fallback (in case older auth-guard is cached)
+          for (let i = 0; i < 100 && window.__currentUser === undefined; i++) {
+            await new Promise(r => setTimeout(r, 50));
+          }
+        }
+      } catch (e) {
+        // auth-guard will redirect to login on its own
+        return;
+      }
+      await loadMySlips();
+    });
+
+    async function loadMySlips() {
+      const grid = document.getElementById('slipGrid');
+      const subtitle = document.getElementById('subtitle');
+      const me = window.__currentUser;
+
+      if (!me) {
+        grid.innerHTML = `
+          <p class="empty-state">
+            <span class="icon">🔒</span>
+            Not logged in. Redirecting...
+          </p>`;
+        return;
+      }
+
+      // Admin (or user without empId) → nothing to show
+      if (!me.empId) {
+        subtitle.textContent = '';
+        grid.innerHTML = `
+          <p class="empty-state">
+            <span class="icon">📭</span>
+            No employee record is linked to this account.<br>
+            Ask your admin to link your EMP ID (or open <strong>My Slips</strong> as the correct employee).
+          </p>`;
+        return;
+      }
+
+      subtitle.textContent =
+        `Showing slips for ${me.empId}${me.name ? ' (' + me.name + ')' : ''}`;
+
+      try {
+        const res = await fetch(`${API}/my-slips`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to fetch slips');
+        const slips = await res.json();
+
+        if (!slips || slips.length === 0) {
+          grid.innerHTML = `
+            <p class="empty-state">
+              <span class="icon">📭</span>
+              You don't have any saved salary slips yet.
+            </p>`;
+          return;
+        }
+
+        let html = '';
+        slips.forEach(slip => {
+          const present = (slip.attendanceSummary?.present || 0);
+          const absent = (slip.attendanceSummary?.absent || 0);
+          const paid = (slip.attendanceSummary?.paid || 0);
+          const na = (slip.attendanceSummary?.na || 0);
+
+          const baseSalary = parseFloat(slip.baseSalary) || 0;
+          const daysInMonth = slip.calendar ? slip.calendar.length : 30;
+          const dailyRate = daysInMonth > 0 ? baseSalary / daysInMonth : 0;
+          const absentDays = absent + na;
+          const deduction = absentDays * dailyRate;
+
+          let totalBonus = 0;
+          if (slip.bonusData && Array.isArray(slip.bonusData)) {
+            slip.bonusData.forEach(b => totalBonus += parseFloat(b.amount) || 0);
+          }
+          const netSalary = baseSalary - deduction + totalBonus;
+
+          html += `
+            <div class="slip-card" onclick="viewSlip('${slip.empId}','${slip.month}')">
+              <div class="month">📅 ${formatMonthDisplay(slip.month)}</div>
+              <div class="row"><span>Base Salary</span><strong>₹${baseSalary.toFixed(2)}</strong></div>
+              <div class="row"><span>Present Days</span><strong>${present}</strong></div>
+              <div class="row"><span>Absent</span><strong>${absent}</strong></div>
+              <div class="row"><span>Paid Leave</span><strong>${paid}</strong></div>
+              ${totalBonus > 0 ? `<div class="row"><span>Bonus</span><strong>+ ₹${totalBonus.toFixed(2)}</strong></div>` : ''}
+              <div class="row"><span>Deductions</span><strong style="color:#e53e3e;">- ₹${deduction.toFixed(2)}</strong></div>
+              <div class="net">₹${netSalary.toFixed(2)}</div>
+              <div class="meta">Version ${slip.version || 1} · Click to view</div>
+            </div>
+          `;
+        });
+        grid.innerHTML = html;
+      } catch (err) {
+        console.error(err);
+        grid.innerHTML = `
+          <p class="empty-state" style="color:#e53e3e;">
+            ❌ Failed to load slips. Please refresh.
+          </p>`;
+      }
+    }
+
+    function formatMonthDisplay(monthStr) {
+      if (!monthStr) return 'N/A';
+      const [year, month] = monthStr.split('-');
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${months[parseInt(month)-1]} ${year}`;
+    }
+
+    function viewSlip(empId, month) {
+      window.open(`view-slip.html?empId=${empId}&month=${month}`, '_blank');
+    }
+  </script>
+</body>
+</html>

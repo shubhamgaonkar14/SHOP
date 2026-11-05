@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mangokatta · View Salary Slip</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .slip-container {
+      max-width: 900px;
+      margin: 20px auto;
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    
+    .back-button {
+      background: #718096;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    .back-button:hover {
+      background: #4a5568;
+    }
+    
+    .print-button {
+      background: #38a169;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      margin-left: 10px;
+      font-size: 14px;
+    }
+    
+    .version-selector {
+      margin: 15px 0;
+      padding: 15px;
+      background: #f7fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .version-selector select {
+      padding: 8px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="slip-container">
+    <button onclick="window.close()" class="back-button">← Close</button>
+    <button onclick="window.print()" class="print-button">🖨️ Print</button>
+    
+    <div class="version-selector" id="versionSelector" style="display:none;">
+      <label>
+        <strong>View Version:</strong>
+        <select id="versionSelect" onchange="loadVersion(this.value)">
+          <option value="latest">Latest Version</option>
+        </select>
+      </label>
+    </div>
+    
+    <div class="company" style="margin-top:20px;">
+      <h1>MANGOKATTA</h1>
+      <div class="subtitle">Salary Slip</div>
+    </div>
+    
+    <div id="slipContent">
+      <p style="text-align:center;color:#718096;padding:40px;">Loading salary slip...</p>
+    </div>
+  </div>
+
+<script src="auth-guard.js"></script>
+
+  <script>
+    const API = window.location.hostname === 'localhost'
+  ? 'http://localhost:3000/api'
+  : '/api';
+    
+    document.addEventListener('DOMContentLoaded', loadSlip);
+    
+    async function loadSlip() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const empId = urlParams.get('empId');
+      const month = urlParams.get('month');
+      
+      if (!empId || !month) {
+        document.getElementById('slipContent').innerHTML = 
+          '<p style="color:#e53e3e;text-align:center;">Missing parameters</p>';
+        return;
+      }
+      
+      try {
+        // Load current slip
+        const res = await fetch(`${API}/get-slip/${empId}/${month}`);
+        if (!res.ok) throw new Error('Slip not found');
+        
+        const slip = await res.json();
+        
+        // Load employee details
+        let employee = null;
+        try {
+          const empRes = await fetch(`${API}/get-employee/${empId}`);
+          employee = await empRes.json();
+        } catch (e) {}
+        
+        // Load versions
+        await loadVersions(empId, month);
+        
+        // Display slip
+        displaySlip(slip, employee);
+        
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('slipContent').innerHTML = 
+          '<p style="color:#e53e3e;text-align:center;padding:40px;">❌ Failed to load salary slip</p>';
+      }
+    }
+    
+    async function loadVersions(empId, month) {
+      try {
+        const res = await fetch(`${API}/get-versions/${empId}/${month}`);
+        const versions = await res.json();
+        
+        if (versions.length > 1) {
+          document.getElementById('versionSelector').style.display = 'block';
+          const select = document.getElementById('versionSelect');
+          versions.forEach(v => {
+            const option = document.createElement('option');
+            option.value = v.version;
+            option.textContent = `Version ${v.version} - ${new Date(v.savedAt).toLocaleDateString('en-IN')}`;
+            select.appendChild(option);
+          });
+        }
+      } catch (error) {
+        console.log('No versions available');
+      }
+    }
+    
+    async function loadVersion(version) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const empId = urlParams.get('empId');
+      const month = urlParams.get('month');
+      
+      try {
+        if (version === 'latest') {
+          const res = await fetch(`${API}/get-slip/${empId}/${month}`);
+          const slip = await res.json();
+          displaySlip(slip, null);
+        } else {
+          const res = await fetch(`${API}/get-version/${empId}/${month}/${version}`);
+          const versionData = await res.json();
+          
+          // Convert version data to slip format
+          const slip = {
+            empId: versionData.empId,
+            employeeName: versionData.employeeName,
+            month: versionData.month,
+            baseSalary: versionData.baseSalary,
+            calendar: versionData.calendar,
+            bonusEnabled: versionData.bonusEnabled,
+            bonusData: versionData.bonusData,
+            notes: versionData.notes,
+            version: versionData.version,
+            savedAt: versionData.savedAt
+          };
+          
+          displaySlip(slip, null);
+        }
+      } catch (error) {
+        alert('Failed to load version');
+      }
+    }
+    
+    function displaySlip(slip, employee) {
+      const empName = slip.employeeName || (employee ? employee.name : 'N/A');
+      const mobile = employee ? employee.mobile : 'N/A';
+      const email = employee ? employee.email : 'N/A';
+      const idNo = employee ? employee.idNo : 'N/A';
+      
+      // Calculate attendance
+      let present = 0, absent = 0, paid = 0, na = 0;
+      if (slip.calendar) {
+        slip.calendar.forEach(day => {
+          if (day.status === 'Present') present++;
+          else if (day.status === 'Absent') absent++;
+          else if (day.status === 'Paid') paid++;
+          else if (day.status === 'NA') na++;
+        });
+      }
+      
+      const monthDisplay = formatMonth(slip.month);
+      const daysInMonth = slip.calendar ? slip.calendar.length : 30;
+      const baseSalary = parseFloat(slip.baseSalary) || 0;
+      const dailyRate = baseSalary / daysInMonth;
+      const deduction = (absent + na) * dailyRate;
+      
+      // Calculate bonus total
+      let totalBonus = 0;
+      if (slip.bonusData && slip.bonusData.length > 0) {
+        slip.bonusData.forEach(b => {
+          totalBonus += parseFloat(b.amount) || 0;
+        });
+      }
+      
+      const finalSalary = baseSalary - deduction + totalBonus;
+      const version = slip.version || 1;
+      const savedDate = slip.savedAt ? new Date(slip.savedAt).toLocaleDateString('en-IN', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      }) : 'N/A';
+      
+      let html = `
+        <div class="details-card">
+          <div class="details-grid">
+            <div><strong>🆔 EMP ID:</strong> ${slip.empId}</div>
+            <div><strong>👤 Name:</strong> ${empName}</div>
+            <div><strong>🪪 ID:</strong> ${idNo}</div>
+            <div><strong>📱 Mobile:</strong> ${mobile}</div>
+            <div><strong>✉️ Email:</strong> ${email}</div>
+            <div><strong>📅 Month:</strong> ${monthDisplay}</div>
+          </div>
+          <div style="margin-top:10px;">
+            <span class="version-badge">Version ${version}</span>
+            <small style="color:#718096;margin-left:10px;">Saved: ${savedDate}</small>
+          </div>
+        </div>
+        
+        <h3 style="margin:20px 0 10px;">📊 Attendance Calendar</h3>
+        <table>
+          <thead>
+            <tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>
+          </thead>
+          <tbody>`;
+      
+      if (slip.calendar && slip.calendar.length > 0) {
+        const [year, monthNum] = slip.month.split('-');
+        const firstDay = new Date(year, monthNum - 1, 1).getDay();
+        
+        let dateCounter = 1;
+        let rowHtml = '<tr>';
+        
+        // Add empty cells for days before 1st
+        for (let i = 0; i < firstDay; i++) {
+          rowHtml += '<td></td>';
+        }
+        
+        slip.calendar.forEach((day, index) => {
+          if ((firstDay + index) % 7 === 0 && index > 0) {
+            rowHtml += '</tr><tr>';
+          }
+          
+          const statusClass = day.status.toLowerCase();
+          rowHtml += `<td class="${statusClass}"><b>${day.date}</b><br>${day.status}</td>`;
+        });
+        
+        rowHtml += '</tr>';
+        html += rowHtml;
+      }
+      
+      html += `
+          </tbody>
+        </table>
+        
+        <div class="summary-section">
+          <h3>💰 Salary Calculation</h3>
+          <div class="row-flex"><span>✅ Present Days</span><span>${present}</span></div>
+          <div class="row-flex"><span>🟡 Paid Leave</span><span>${paid}</span></div>
+          <div class="row-flex"><span>⛔ NA (Deducted)</span><span>${na}</span></div>
+          <div class="row-flex"><span>❌ Unpaid Absent</span><span>${absent}</span></div>
+          <hr>
+          <div class="row-flex"><span>💼 Base Salary</span><span>₹${baseSalary.toLocaleString()}</span></div>
+          <div class="row-flex"><span>📆 Days in Month</span><span>${daysInMonth}</span></div>
+          <div class="row-flex"><span>📉 Deduction (${absent+na} days × ₹${dailyRate.toFixed(2)})</span><span style="color:#e53e3e;">- ₹${deduction.toFixed(2)}</span></div>`;
+      
+      if (slip.bonusData && slip.bonusData.length > 0) {
+        html += '<hr><h4>✨ Bonuses</h4>';
+        slip.bonusData.forEach(b => {
+          const amount = parseFloat(b.amount) || 0;
+          if (amount > 0) {
+            html += `<div class="row-flex"><span>➕ ${b.name} ${b.comment ? '('+b.comment+')' : ''}</span><span style="color:#38a169;">+ ₹${amount.toFixed(2)}</span></div>`;
+          }
+        });
+      }
+      
+      html += `
+          <hr>
+          <div class="final-box">
+            <span>💰 Net Payable Salary</span>
+            <span class="final-amount">₹${finalSalary.toFixed(2)}</span>
+          </div>
+        </div>`;
+      
+      if (slip.notes) {
+        html += `
+          <div class="note-box">
+            <div class="note-header">
+              <span>📌</span>
+              <span>Notes</span>
+            </div>
+            <div style="font-size:13px;line-height:1.7;">${slip.notes}</div>
+          </div>`;
+      }
+      
+      document.getElementById('slipContent').innerHTML = html;
+    }
+    
+    function formatMonth(monthStr) {
+      if (!monthStr) return 'N/A';
+      const [year, month] = monthStr.split('-');
+      const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      return `${months[parseInt(month)-1]} ${year}`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mangokatta · Salary History</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .history-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+      margin: 15px 0 20px;
+    }
+    
+    .stat-card {
+      background: white;
+      padding: 15px 20px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    
+    .stat-card .stat-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1e3a5f;
+    }
+    
+    .stat-card .stat-label {
+      font-size: 12px;
+      color: #718096;
+      margin-top: 4px;
+    }
+    
+    .stat-card .stat-number.green { color: #38a169; }
+    .stat-card .stat-number.orange { color: #d97706; }
+    .stat-card .stat-number.red { color: #e53e3e; }
+    
+    .history-table-wrapper {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 700px;
+    }
+    
+    .history-table th {
+      background: #1e3a5f;
+      color: white;
+      padding: 12px 15px;
+      text-align: left;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+    }
+    
+    .history-table th:hover {
+      background: #2c5282;
+    }
+    
+    .history-table th .sort-icon {
+      margin-left: 5px;
+      font-size: 10px;
+    }
+    
+    .history-table td {
+      padding: 12px 15px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: middle;
+    }
+    
+    .history-table tr:hover {
+      background: #f7fafc;
+    }
+    
+    .history-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .history-table .employee-cell {
+      font-weight: 600;
+      color: #2d3748;
+    }
+    
+    .history-table .emp-id-badge {
+      display: inline-block;
+      background: #ebf4ff;
+      color: #2c5282;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .history-table .month-cell {
+      font-weight: 500;
+      color: #4a5568;
+    }
+    
+    .history-table .amount-cell {
+      font-weight: 600;
+    }
+    
+    .history-table .amount-cell.positive {
+      color: #38a169;
+    }
+    
+    .history-table .amount-cell.negative {
+      color: #e53e3e;
+    }
+    
+    .history-table .version-badge {
+      background: #edf2f7;
+      color: #4a5568;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    
+    .history-table .action-cell {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    
+    .history-table .action-cell button {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    
+    .history-table .action-cell .btn-view-history {
+      background: #3182ce;
+      color: white;
+    }
+    
+    .history-table .action-cell .btn-view-history:hover {
+      background: #2c5282;
+      transform: translateY(-1px);
+    }
+    
+    .history-table .action-cell .btn-view-slip {
+      background: #38a169;
+      color: white;
+    }
+    
+    .history-table .action-cell .btn-view-slip:hover {
+      background: #2f855a;
+      transform: translateY(-1px);
+    }
+    
+    .history-table .action-cell .btn-delete-history {
+      background: #e53e3e;
+      color: white;
+    }
+    
+    .history-table .action-cell .btn-delete-history:hover {
+      background: #c53030;
+      transform: translateY(-1px);
+    }
+    
+    .search-filter {
+      display: flex;
+      gap: 12px;
+      margin: 15px 0 20px;
+      flex-wrap: wrap;
+      align-items: center;
+      background: #f7fafc;
+      padding: 15px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .search-filter input,
+    .search-filter select {
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 13px;
+      flex: 1;
+      min-width: 150px;
+      background: white;
+    }
+    
+    .search-filter input:focus,
+    .search-filter select:focus {
+      outline: none;
+      border-color: #2c5282;
+      box-shadow: 0 0 0 3px rgba(44, 82, 130, 0.1);
+    }
+    
+    .search-filter button {
+      padding: 10px 24px;
+      background: #2c5282;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    
+    .search-filter button:hover {
+      background: #1e3a5f;
+      transform: translateY(-1px);
+    }
+    
+    .search-filter .btn-clear {
+      background: #718096;
+    }
+    
+    .search-filter .btn-clear:hover {
+      background: #4a5568;
+    }
+    
+    .history-empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: #718096;
+    }
+    
+    .history-empty .empty-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+    
+    .history-empty h3 {
+      color: #4a5568;
+      margin-bottom: 8px;
+    }
+    
+    .history-empty p {
+      color: #a0aec0;
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 20px;
+      align-items: center;
+    }
+    
+    .pagination button {
+      padding: 8px 14px;
+      border: 1px solid #e2e8f0;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .pagination button:hover:not(:disabled) {
+      background: #ebf4ff;
+      border-color: #2c5282;
+      color: #2c5282;
+    }
+    
+    .pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .pagination button.active {
+      background: #2c5282;
+      color: white;
+      border-color: #2c5282;
+    }
+    
+    .pagination .page-info {
+      color: #718096;
+      font-size: 14px;
+      padding: 0 10px;
+    }
+    
+    @media (max-width: 768px) {
+      .history-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .search-filter {
+        flex-direction: column;
+      }
+      
+      .search-filter input,
+      .search-filter select,
+      .search-filter button {
+        width: 100%;
+      }
+      
+      .history-table .action-cell {
+        flex-direction: column;
+      }
+      
+      .history-table .action-cell button {
+        width: 100%;
+        text-align: center;
+      }
+    }
+    
+    @media print {
+      .search-filter,
+      .action-cell,
+      .pagination,
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+
+<script src="auth-guard.js"></script>
+
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">🏢 MANGOKATTA</div>
+    <div class="nav-links">
+      <a href="index.html">📝 Generate Slip</a>
+      <a href="history.html" class="active">📊 History</a>
+      <a href="versions.html">🔄 Attendance Versions</a>
+      <a href="employees.html">👥 Employees</a>
+      <a href="business.html">💼 Business</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h2>📊 Salary Slip History</h2>
+    <p style="color:#718096;margin-bottom:15px;">View and manage all salary slips with net salary calculations</p>
+    
+    <!-- Stats Cards -->
+    <div class="history-stats" id="statsContainer">
+      <div class="stat-card">
+        <div class="stat-number" id="totalSlips">0</div>
+        <div class="stat-label">📄 Total Slips</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number green" id="totalSalary">₹0</div>
+        <div class="stat-label">💰 Total Net Salary</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number orange" id="avgSalary">₹0</div>
+        <div class="stat-label">📊 Average Salary</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number red" id="totalDeduction">₹0</div>
+        <div class="stat-label">📉 Total Deductions</div>
+      </div>
+    </div>
+    
+    <!-- Search & Filter -->
+    <div class="search-filter">
+      <select id="empFilter" onchange="loadHistory()">
+        <option value="">All Employees</option>
+      </select>
+      <input type="month" id="monthFilter" onchange="loadHistory()">
+      <input type="text" id="searchInput" placeholder="🔍 Search by name or ID..." oninput="filterTable()">
+      <button onclick="loadHistory()">🔍 Apply Filters</button>
+      <button onclick="clearFilters()" class="btn-clear">✕ Clear</button>
+    </div>
+
+    <!-- History Table -->
+    <div class="history-table-wrapper">
+      <table class="history-table" id="historyTable">
+        <thead>
+          <tr>
+            <th onclick="sortTable('empId')">Employee <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('employeeName')">Name <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('month')">Month <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('baseSalary')">Base Salary <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('deduction')">Deduction <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('bonus')">Bonus <span class="sort-icon">↕</span></th>
+            <th onclick="sortTable('netSalary')">💰 Net Salary <span class="sort-icon">↕</span></th>
+            <th>Version</th>
+            <th class="no-print">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr>
+            <td colspan="9" style="text-align:center;padding:40px;color:#718096;">
+              <span style="font-size:24px;display:block;margin-bottom:10px;">📭</span>
+              No salary slips found
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="pagination no-print" id="pagination">
+      <button onclick="changePage('prev')" id="prevPage">← Previous</button>
+      <span class="page-info" id="pageInfo">Page 1 of 1</span>
+      <button onclick="changePage('next')" id="nextPage">Next →</button>
+    </div>
+  </div>
+
+  <script src="history.js"></script>
+</body>
+</html>

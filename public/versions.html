@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mangokatta · Attendance Versions</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<script src="auth-guard.js"></script>
+
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">🏢 MANGOKATTA</div>
+    <div class="nav-links">
+      <a href="index.html">📝 Generate Slip</a>
+      <a href="history.html">📊 History</a>
+      <a href="versions.html" class="active">🔄 Attendance Versions</a>
+      <a href="employees.html">👥 Employees</a>
+      <a href="business.html">💼 Business</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h2>🔄 Attendance Version History</h2>
+    <p class="subtitle">Track changes in attendance records by version</p>
+    
+    <div class="search-filter">
+      <select id="empSelect" onchange="loadEmployeeMonths()">
+        <option value="">Select Employee</option>
+      </select>
+      <select id="monthSelect" onchange="loadVersions()">
+        <option value="">Select Month</option>
+      </select>
+      <button onclick="loadVersions()">🔍 Load Versions</button>
+    </div>
+
+    <div id="versionsContent"></div>
+  </div>
+
+  <script src="versions.js"></script>
+</body>
+</html>

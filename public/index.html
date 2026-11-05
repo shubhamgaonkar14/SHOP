@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mangokatta · Salary Slip</title>
+  <link rel="stylesheet" href="styles.css">
+    <style>
+    /* ============ PAINT MODE STYLES ============ */
+    .paint-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 15px;
+      margin: 0 0 12px 0;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+    }
+    .paint-label {
+      font-weight: 700;
+      font-size: 13px;
+      color: #2c5282;
+      margin-right: 5px;
+    }
+    .paint-btn {
+      padding: 8px 14px !important;
+      border: 2px solid #cbd5e1 !important;
+      background: white !important;
+      color: #2d3748 !important;
+      border-radius: 20px !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: all 0.15s !important;
+      transform: none !important;
+    }
+    .paint-btn:hover {
+      border-color: #2c5282 !important;
+      background: #ebf4ff !important;
+      transform: none !important;
+      opacity: 1 !important;
+    }
+    .paint-btn.active {
+      background: #2c5282 !important;
+      color: white !important;
+      border-color: #2c5282 !important;
+      box-shadow: 0 2px 8px rgba(44,82,130,0.3);
+    }
+    .paint-btn.active[data-status="Present"]   { background: #38a169 !important; border-color: #38a169 !important; }
+    .paint-btn.active[data-status="HalfDay"]   { background: #3182ce !important; border-color: #3182ce !important; }
+    .paint-btn.active[data-status="Absent"]    { background: #e53e3e !important; border-color: #e53e3e !important; }
+    .paint-btn.active[data-status="Paid"]      { background: #d97706 !important; border-color: #d97706 !important; }
+    .paint-btn.active[data-status="NA"]        { background: #718096 !important; border-color: #718096 !important; }
+    .paint-hint {
+      margin-left: auto;
+      font-size: 11px;
+      color: #718096;
+      font-style: italic;
+    }
+    /* Highlight the whole cell when painting is active */
+    .paint-mode-active #calendarTable td {
+      cursor: crosshair !important;
+    }
+    .paint-mode-active #calendarTable td:hover {
+      outline: 2px dashed #2c5282;
+      outline-offset: -3px;
+    }
+    /* Keep the select in sync visually when disabled during paint */
+    .paint-mode-active #calendarTable td select {
+      pointer-events: none;
+      opacity: 0.85;
+    }
+    /* Hide the toolbar during print */
+    @media print {
+      .paint-toolbar { display: none !important; }
+    }
+  </style>
+</head>
+
+<script src="auth-guard.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">🏢 MANGOKATTA</div>
+    <div class="nav-links">
+      <a href="index.html" class="active">📝 Generate Slip</a>
+      <a href="my-slips.html">💼 My Slips</a>
+      <a href="history.html">📊 History</a>
+      <a href="versions.html">🔄 Attendance Versions</a>
+      <a href="employees.html">👥 Employees</a>
+      <a href="business.html">💼 Business</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="company">
+      <h1>MANGOKATTA</h1>
+      <div class="subtitle">Salary Slip</div>
+    </div>
+
+    <div class="employee-selector">
+      <select id="employeeDropdown" onchange="onEmployeeSelect()">
+        <option value="">-- Select Employee --</option>
+      </select>
+      <button onclick="loadAllEmployees()">🔄 Refresh</button>
+    </div>
+
+    <div class="top-panel">
+      <input type="text" id="empId" placeholder="EMP ID">
+      <input type="text" id="empName" placeholder="Employee Name">
+      <input type="text" id="idNo" placeholder="ID Number">
+      <input type="text" id="mobileNo" placeholder="Mobile">
+      <input type="email" id="emailId" placeholder="Email">
+      <input type="month" id="monthPicker">
+      <input type="number" id="baseSalary" placeholder="Salary" value="6500" step="100">
+      <button onclick="generateSlip()" class="btn-generate">Generate</button>
+      <button onclick="updateEmployee()" class="btn-update">✏️ Update Employee</button>
+    </div>
+
+    <div class="bonus-toggle-area">
+      <label>
+        <input type="checkbox" id="enableBonusCheckbox" onchange="handleBonusToggle()">
+        Add Bonus / Incentive
+      </label>
+    </div>
+
+        <div class="details-card" id="detailsBlock"></div>
+
+    <!-- ============ PAINT MODE TOOLBAR ============ -->
+    <div id="paintToolbar" class="paint-toolbar">
+      <span class="paint-label">🎨 Bulk Fill Mode:</span>
+      <button type="button" class="paint-btn" data-status="Present">✅ Present</button>
+      <button type="button" class="paint-btn" data-status="HalfDay">🌓 Half Day</button>
+      <button type="button" class="paint-btn" data-status="Absent">❌ Absent</button>
+      <button type="button" class="paint-btn" data-status="Paid">🟡 Paid Leave</button>
+      <button type="button" class="paint-btn" data-status="NA">⛔ NA</button>
+      <span class="paint-hint" id="paintHint">Click a status, then drag over calendar days</span>
+    </div>
+    <!-- ========================================== -->
+
+    <table id="calendarTable">
+      <thead>
+        <tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="summary-section" id="summaryContainer"></div>
+    <div id="finalSection"></div>
+
+    <div class="note-box">
+      <div class="note-header">
+        <span>📌</span>
+        <span>Notes</span>
+      </div>
+      <div class="note-content" id="manualNote" contenteditable="true">
+        • Salary will be credited on the 5th of every month for the previous month. (पगार दर महिन्याच्या ५ तारखेला मागील महिन्यासाठी जमा केला जाईल.)
+      </div>
+      <div id="noteTemplates"></div>
+    </div>
+
+    <div class="action-buttons">
+      <button onclick="calculateSalary()">🔄 Recalculate</button>
+      <button onclick="saveCurrentSlip()" class="btn-save">💾 Save Slip</button>
+      <button onclick="loadSavedSlip()" class="btn-load">📂 Load Saved</button>
+      <button onclick="deleteCurrentSlip()" class="btn-delete">🗑️ Delete</button>
+      <button onclick="window.print()" class="btn-print">🖨️ Print</button>
+      <div class="filename-display no-print" id="filenameDisplay" style="text-align:center;margin-bottom:10px;padding:8px;background:#f0f4f8;border-radius:6px;border:1px dashed #cbd5e1;">
+        <span style="color:#718096;font-size:12px;">📁 Save as: </span>
+        <span id="filenameText" style="color:#2c5282;font-weight:600;font-size:13px;user-select:all;cursor:pointer;" onclick="copyFilename()" title="Click to copy">employee_january_2026_salary_slip</span>
+        <span id="copyMsg" style="color:#38a169;font-size:11px;margin-left:8px;display:none;">✅ Copied!</span>
+      </div>
+    </div>
+
+    <div id="statusMessage" class="status-message"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
